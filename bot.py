@@ -1,0 +1,176 @@
+"""
+بوت تلغرام لإرسال الأذكار تلقائيًا للمشتركين حسب جدول زمني محدد في config.json
+"""
+
+import json
+import logging
+import os
+import sqlite3
+from datetime import time as dtime
+
+from telegram import Update
+from telegram.constants import ParseMode
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "subscribers.db")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+
+# ---------- قاعدة البيانات ----------
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS subscribers (
+                chat_id INTEGER PRIMARY KEY,
+                joined_at TEXT DEFAULT CURRENT_TIMESTAMP
+           )"""
+    )
+    conn.commit()
+    conn.close()
+
+
+def add_subscriber(chat_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        "INSERT OR IGNORE INTO subscribers (chat_id) VALUES (?)", (chat_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def remove_subscriber(chat_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM subscribers WHERE chat_id = ?", (chat_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_all_subscribers():
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("SELECT chat_id FROM subscribers").fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+
+def subscriber_count():
+    conn = sqlite3.connect(DB_PATH)
+    count = conn.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
+    conn.close()
+    return count
+
+
+# ---------- الإعدادات ----------
+def load_config():
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+# ---------- أوامر البوت ----------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    add_subscriber(chat_id)
+    await update.message.reply_text(
+        "✅ تم اشتراكك بنجاح في بوت الأذكار.\n"
+        "سيصلك تذكير تلقائي في مواعيد الصباح والمساء بإذن الله.\n\n"
+        "لإلغاء الاشتراك في أي وقت أرسل الأمر /stop"
+    )
+
+
+async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    remove_subscriber(chat_id)
+    await update.message.reply_text("❌ تم إلغاء اشتراكك. نسأل الله أن يحفظك.")
+
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    config = load_config()
+    admin_id = config.get("admin_chat_id")
+    if admin_id and update.effective_chat.id != admin_id:
+        return
+    await update.message.reply_text(f"👥 عدد المشتركين: {subscriber_count()}")
+
+
+async def test_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """يرسل أول ذكر من الجدول للمرسل فقط، لتجربة الشكل قبل النشر."""
+    config = load_config()
+    if not config["schedule"]:
+        await update.message.reply_text("لا يوجد أذكار في الجدول بعد.")
+        return
+    entry = config["schedule"][0]
+    await send_entry(context, entry, chat_ids=[update.effective_chat.id])
+
+
+# ---------- الإرسال ----------
+async def send_entry(context: ContextTypes.DEFAULT_TYPE, entry: dict, chat_ids=None):
+    if chat_ids is None:
+        chat_ids = get_all_subscribers()
+
+    image_path = os.path.join(BASE_DIR, entry["image"]) if entry.get("image") else None
+    has_image = image_path and os.path.exists(image_path)
+
+    for chat_id in chat_ids:
+        try:
+            if has_image:
+                with open(image_path, "rb") as img:
+                    await context.bot.send_photo(chat_id=chat_id, photo=img)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=entry["text"],
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as e:
+            logger.warning(f"فشل الإرسال إلى {chat_id}: {e}")
+
+
+async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
+    entry = context.job.data
+    logger.info(f"إرسال جدولة: {entry['id']}")
+    await send_entry(context, entry)
+
+
+# ---------- إعداد الجدولة ----------
+def setup_jobs(application: Application, config: dict):
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(config.get("timezone", "Asia/Riyadh"))
+    for entry in config["schedule"]:
+        hour, minute = map(int, entry["time"].split(":"))
+        application.job_queue.run_daily(
+            scheduled_job,
+            time=dtime(hour=hour, minute=minute, tzinfo=tz),
+            data=entry,
+            name=entry["id"],
+        )
+        logger.info(f"تمت جدولة '{entry['id']}' الساعة {entry['time']} ({tz})")
+
+
+def build_application() -> Application:
+    if not BOT_TOKEN:
+        raise RuntimeError("يجب ضبط متغير البيئة BOT_TOKEN بتوكن البوت من BotFather")
+
+    init_db()
+    config = load_config()
+
+    application = Application.builder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("stop", stop))
+    application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("test", test_send))
+
+    setup_jobs(application, config)
+    return application
+
+
+if __name__ == "__main__":
+    app = build_application()
+    logger.info("البوت يعمل الآن (polling)...")
+    app.run_polling()
