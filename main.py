@@ -4,6 +4,7 @@ Render يتطلب من خدمات الويب المجانية الاستماع �
 خادم Flask بسيط بجانب البوت الذي يعمل بنظام polling في خيط منفصل.
 """
 
+import asyncio
 import os
 import threading
 
@@ -19,6 +20,11 @@ def home():
 
 
 def run_bot():
+    # بايثون لا ينشئ حلقة أحداث (event loop) تلقائيًا داخل الخيوط الفرعية،
+    # لذلك ننشئها يدويًا هنا قبل تشغيل البوت.
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     application = build_application()
     # stop_signals=None ضروري لأن هذا يعمل داخل خيط فرعي وليس الخيط الرئيسي،
     # ومعالجة إشارات النظام (signals) لا تعمل إلا في الخيط الرئيسي.
