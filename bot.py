@@ -31,7 +31,6 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 
-# ---------- قاعدة البيانات ----------
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
@@ -74,13 +73,11 @@ def subscriber_count():
     return count
 
 
-# ---------- الإعدادات ----------
 def load_config():
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# ---------- أوامر البوت ----------
 def build_welcome_text() -> str:
     return (
         "🕌 <b>مرحبًا بك في بوت الأذكار</b>\n\n"
@@ -101,7 +98,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def any_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يرد بنفس رسالة الترحيب على أي رسالة نصية عادية (غير أمر) يرسلها المستخدم."""
     chat_id = update.effective_chat.id
     add_subscriber(chat_id)
     await update.message.reply_text(build_welcome_text(), parse_mode=ParseMode.HTML)
@@ -122,7 +118,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def test_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يرسل أول ذكر من الجدول للمرسل فقط، لتجربة الشكل قبل النشر."""
     config = load_config()
     if not config["schedule"]:
         await update.message.reply_text("لا يوجد أذكار في الجدول بعد.")
@@ -131,7 +126,6 @@ async def test_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_entry(context, entry, chat_ids=[update.effective_chat.id])
 
 
-# ---------- الإرسال ----------
 async def send_entry(context: ContextTypes.DEFAULT_TYPE, entry: dict, chat_ids=None):
     if chat_ids is None:
         chat_ids = get_all_subscribers()
@@ -159,7 +153,6 @@ async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
     await send_entry(context, entry)
 
 
-# ---------- إعداد الجدولة ----------
 def setup_jobs(application: Application, config: dict):
     from zoneinfo import ZoneInfo
 
@@ -186,7 +179,6 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("test", test_send))
-    # يرد على أي رسالة نصية عادية (ليست أمرًا مثل /start) بنفس رسالة الترحيب
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, any_message)
     )
