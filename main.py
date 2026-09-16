@@ -20,7 +20,9 @@ def home():
 
 def run_bot():
     application = build_application()
-    application.run_polling(close_loop=False)
+    # stop_signals=None ضروري لأن هذا يعمل داخل خيط فرعي وليس الخيط الرئيسي،
+    # ومعالجة إشارات النظام (signals) لا تعمل إلا في الخيط الرئيسي.
+    application.run_polling(close_loop=False, stop_signals=None)
 
 
 if __name__ == "__main__":
