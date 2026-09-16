@@ -88,8 +88,7 @@ def build_welcome_text() -> str:
         "سيصلك تذكير تلقائي بأذكار الصباح والمساء في مواعيدها بإذن الله.\n\n"
         "━━━━━━━━━━━━━━\n\n"
         "📌 <b>الأوامر المتاحة لك:</b>\n"
-        "• /test — معاينة أول ذكر في الجدول فورًا\n"
-        "• /stop — إلغاء الاشتراك في أي وقت\n\n"
+        "• /test — معاينة أول ذكر في الجدول فورًا\n\n"
         "🤍 لا تنسونا من صالح دعائكم"
     )
 
@@ -184,7 +183,6 @@ def build_application() -> Application:
 
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("test", test_send))
     # يرد على أي رسالة نصية عادية (ليست أمرًا مثل /start) بنفس رسالة الترحيب
