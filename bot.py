@@ -89,6 +89,7 @@ def build_welcome_text() -> str:
         "━━━━━━━━━━━━━━\n\n"
         "📌 <b>الأوامر المتاحة لك:</b>\n"
         "• /test — معاينة أول ذكر في الجدول فورًا\n\n"
+        "💬 لأي استفسار أو اقتراح تواصل معنا: @Yassseeeer\n\n"
         "🤍 لا تنسونا من صالح دعائكم"
     )
 
@@ -115,86 +116,4 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = load_config()
     admin_id = config.get("admin_chat_id")
-    if admin_id and update.effective_chat.id != admin_id:
-        return
-    await update.message.reply_text(f"👥 عدد المشتركين: {subscriber_count()}")
-
-
-async def test_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يرسل أول ذكر من الجدول للمرسل فقط، لتجربة الشكل قبل النشر."""
-    config = load_config()
-    if not config["schedule"]:
-        await update.message.reply_text("لا يوجد أذكار في الجدول بعد.")
-        return
-    entry = config["schedule"][0]
-    await send_entry(context, entry, chat_ids=[update.effective_chat.id])
-
-
-# ---------- الإرسال ----------
-async def send_entry(context: ContextTypes.DEFAULT_TYPE, entry: dict, chat_ids=None):
-    if chat_ids is None:
-        chat_ids = get_all_subscribers()
-
-    image_path = os.path.join(BASE_DIR, entry["image"]) if entry.get("image") else None
-    has_image = image_path and os.path.exists(image_path)
-
-    for chat_id in chat_ids:
-        try:
-            if has_image:
-                with open(image_path, "rb") as img:
-                    await context.bot.send_photo(chat_id=chat_id, photo=img)
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=entry["text"],
-                parse_mode=ParseMode.HTML,
-            )
-        except Exception as e:
-            logger.warning(f"فشل الإرسال إلى {chat_id}: {e}")
-
-
-async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
-    entry = context.job.data
-    logger.info(f"إرسال جدولة: {entry['id']}")
-    await send_entry(context, entry)
-
-
-# ---------- إعداد الجدولة ----------
-def setup_jobs(application: Application, config: dict):
-    from zoneinfo import ZoneInfo
-
-    tz = ZoneInfo(config.get("timezone", "Asia/Riyadh"))
-    for entry in config["schedule"]:
-        hour, minute = map(int, entry["time"].split(":"))
-        application.job_queue.run_daily(
-            scheduled_job,
-            time=dtime(hour=hour, minute=minute, tzinfo=tz),
-            data=entry,
-            name=entry["id"],
-        )
-        logger.info(f"تمت جدولة '{entry['id']}' الساعة {entry['time']} ({tz})")
-
-
-def build_application() -> Application:
-    if not BOT_TOKEN:
-        raise RuntimeError("يجب ضبط متغير البيئة BOT_TOKEN بتوكن البوت من BotFather")
-
-    init_db()
-    config = load_config()
-
-    application = Application.builder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("test", test_send))
-    # يرد على أي رسالة نصية عادية (ليست أمرًا مثل /start) بنفس رسالة الترحيب
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, any_message)
-    )
-
-    setup_jobs(application, config)
-    return application
-
-
-if __name__ == "__main__":
-    app = build_application()
-    logger.info("البوت يعمل الآن (polling)...")
-    app.run_polling()
+    if admin_id
