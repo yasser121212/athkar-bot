@@ -79,9 +79,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     add_subscriber(chat_id)
     await update.message.reply_text(
-        "✅ تم اشتراكك بنجاح في بوت الأذكار.\n"
-        "سيصلك تذكير تلقائي في مواعيد الصباح والمساء بإذن الله.\n\n"
-        "لإلغاء الاشتراك في أي وقت أرسل الأمر /stop"
+        async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    add_subscriber(chat_id)
+    welcome_text = (
+        "🕌 <b>مرحبًا بك في بوت الأذكار</b>\n\n"
+        "تم تفعيل اشتراكك بنجاح ✅\n"
+        "سيصلك تذكير تلقائي بأذكار الصباح والمساء في مواعيدها بإذن الله.\n\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "📌 <b>الأوامر المتاحة لك:</b>\n"
+        "• /test — معاينة أول ذكر في الجدول فورًا\n"
+        "• /stop — إلغاء الاشتراك في أي وقت\n\n"
+        "🤍 لا تنسونا من صالح دعائكم"
+    )
+    await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
     )
 
 
