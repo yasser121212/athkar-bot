@@ -10,7 +10,13 @@ from datetime import time as dtime
 
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -75,14 +81,8 @@ def load_config():
 
 
 # ---------- أوامر البوت ----------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    add_subscriber(chat_id)
-    await update.message.reply_text(
-        async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    add_subscriber(chat_id)
-    welcome_text = (
+def build_welcome_text() -> str:
+    return (
         "🕌 <b>مرحبًا بك في بوت الأذكار</b>\n\n"
         "تم تفعيل اشتراكك بنجاح ✅\n"
         "سيصلك تذكير تلقائي بأذكار الصباح والمساء في مواعيدها بإذن الله.\n\n"
@@ -92,8 +92,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /stop — إلغاء الاشتراك في أي وقت\n\n"
         "🤍 لا تنسونا من صالح دعائكم"
     )
-    await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
-    )
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    add_subscriber(chat_id)
+    await update.message.reply_text(build_welcome_text(), parse_mode=ParseMode.HTML)
+
+
+async def any_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """يرد بنفس رسالة الترحيب على أي رسالة نصية عادية (غير أمر) يرسلها المستخدم."""
+    chat_id = update.effective_chat.id
+    add_subscriber(chat_id)
+    await update.message.reply_text(build_welcome_text(), parse_mode=ParseMode.HTML)
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -176,6 +187,10 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("test", test_send))
+    # يرد على أي رسالة نصية عادية (ليست أمرًا مثل /start) بنفس رسالة الترحيب
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, any_message)
+    )
 
     setup_jobs(application, config)
     return application
