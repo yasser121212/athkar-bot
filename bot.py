@@ -29,7 +29,7 @@ DB_PATH = os.path.join(BASE_DIR, "subscribers.db")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_CHAT_ID = 6644045109  # رقمك الشخصي في تلغرام، يُستخدم لحصر أمر /stats عليك فقط
+ADMIN_CHAT_ID = 6644045109  # رقمك الشخصي في تلغرام، يُستخدم لحصر أمر /stats و/users عليك فقط
 
 
 def init_db():
@@ -37,17 +37,29 @@ def init_db():
     conn.execute(
         """CREATE TABLE IF NOT EXISTS subscribers (
                 chat_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
                 joined_at TEXT DEFAULT CURRENT_TIMESTAMP
            )"""
     )
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(subscribers)")}
+    if "username" not in existing_cols:
+        conn.execute("ALTER TABLE subscribers ADD COLUMN username TEXT")
+    if "first_name" not in existing_cols:
+        conn.execute("ALTER TABLE subscribers ADD COLUMN first_name TEXT")
     conn.commit()
     conn.close()
 
 
-def add_subscriber(chat_id: int):
+def add_subscriber(chat_id: int, username: str = None, first_name: str = None):
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
-        "INSERT OR IGNORE INTO subscribers (chat_id) VALUES (?)", (chat_id,)
+        """INSERT INTO subscribers (chat_id, username, first_name)
+           VALUES (?, ?, ?)
+           ON CONFLICT(chat_id) DO UPDATE SET
+               username = excluded.username,
+               first_name = excluded.first_name""",
+        (chat_id, username, first_name),
     )
     conn.commit()
     conn.close()
@@ -74,6 +86,15 @@ def subscriber_count():
     return count
 
 
+def get_subscribers_details():
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        "SELECT chat_id, username, first_name FROM subscribers ORDER BY joined_at"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
 def load_config():
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -97,14 +118,14 @@ def build_welcome_text() -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    add_subscriber(chat_id)
+    user = update.effective_user
+    add_subscriber(user.id, username=user.username, first_name=user.first_name)
     await update.message.reply_text(build_welcome_text(), parse_mode=ParseMode.HTML)
 
 
 async def any_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    add_subscriber(chat_id)
+    user = update.effective_user
+    add_subscriber(user.id, username=user.username, first_name=user.first_name)
     await update.message.reply_text(build_welcome_text(), parse_mode=ParseMode.HTML)
 
 
@@ -120,6 +141,30 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if admin_id and update.effective_chat.id != admin_id:
         return
     await update.message.reply_text(f"👥 عدد المشتركين: {subscriber_count()}")
+
+
+async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    config = load_config()
+    admin_id = config.get("admin_chat_id") or ADMIN_CHAT_ID
+    if admin_id and update.effective_chat.id != admin_id:
+        return
+
+    rows = get_subscribers_details()
+    if not rows:
+        await update.message.reply_text("لا يوجد مشتركون حتى الآن.")
+        return
+
+    lines = [f"👥 <b>قائمة المشتركين ({len(rows)}):</b>\n"]
+    for i, (chat_id, username, first_name) in enumerate(rows, start=1):
+        name = first_name or "بدون اسم"
+        handle = f"@{username}" if username else "بدون معرّف"
+        lines.append(f"{i}. {name} — {handle} — <code>{chat_id}</code>")
+
+    text = "\n".join(lines)
+    for chunk_start in range(0, len(text), 4000):
+        await update.message.reply_text(
+            text[chunk_start : chunk_start + 4000], parse_mode=ParseMode.HTML
+        )
 
 
 async def test_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,6 +228,7 @@ def build_application() -> Application:
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("users", users))
     application.add_handler(CommandHandler("test", test_send))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, any_message)
