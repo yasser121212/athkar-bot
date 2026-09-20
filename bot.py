@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import time as dtime
 
-import psycopg2
+import psycopg
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -33,7 +33,7 @@ ADMIN_CHAT_ID = 6644045109
 
 
 def get_connection():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
+    return psycopg.connect(DATABASE_URL, sslmode="require")
 
 
 def init_db():
