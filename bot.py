@@ -5,9 +5,9 @@
 import json
 import logging
 import os
-import sqlite3
 from datetime import time as dtime
 
+import psycopg2
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -25,72 +25,86 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "subscribers.db")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_CHAT_ID = 6644045109  # رقمك الشخصي في تلغرام، يُستخدم لحصر أمر /stats و/users عليك فقط
+DATABASE_URL = os.environ.get("DATABASE_URL")
+ADMIN_CHAT_ID = 6644045109
+
+
+def get_connection():
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
         """CREATE TABLE IF NOT EXISTS subscribers (
-                chat_id INTEGER PRIMARY KEY,
+                chat_id BIGINT PRIMARY KEY,
                 username TEXT,
                 first_name TEXT,
-                joined_at TEXT DEFAULT CURRENT_TIMESTAMP
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
            )"""
     )
-    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(subscribers)")}
-    if "username" not in existing_cols:
-        conn.execute("ALTER TABLE subscribers ADD COLUMN username TEXT")
-    if "first_name" not in existing_cols:
-        conn.execute("ALTER TABLE subscribers ADD COLUMN first_name TEXT")
     conn.commit()
+    cur.close()
     conn.close()
 
 
 def add_subscriber(chat_id: int, username: str = None, first_name: str = None):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
         """INSERT INTO subscribers (chat_id, username, first_name)
-           VALUES (?, ?, ?)
-           ON CONFLICT(chat_id) DO UPDATE SET
-               username = excluded.username,
-               first_name = excluded.first_name""",
+           VALUES (%s, %s, %s)
+           ON CONFLICT (chat_id) DO UPDATE SET
+               username = EXCLUDED.username,
+               first_name = EXCLUDED.first_name""",
         (chat_id, username, first_name),
     )
     conn.commit()
+    cur.close()
     conn.close()
 
 
 def remove_subscriber(chat_id: int):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM subscribers WHERE chat_id = ?", (chat_id,))
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM subscribers WHERE chat_id = %s", (chat_id,))
     conn.commit()
+    cur.close()
     conn.close()
 
 
 def get_all_subscribers():
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute("SELECT chat_id FROM subscribers").fetchall()
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT chat_id FROM subscribers")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return [r[0] for r in rows]
 
 
 def subscriber_count():
-    conn = sqlite3.connect(DB_PATH)
-    count = conn.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM subscribers")
+    count = cur.fetchone()[0]
+    cur.close()
     conn.close()
     return count
 
 
 def get_subscribers_details():
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute(
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
         "SELECT chat_id, username, first_name FROM subscribers ORDER BY joined_at"
-    ).fetchall()
+    )
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return rows
 
