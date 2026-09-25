@@ -182,11 +182,27 @@ async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def test_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """يرسل ذكرًا معينًا للمرسل فقط، لتجربة الشكل قبل النشر.
+    الاستخدام: /test (يرسل أول ذكر) أو /test sleep (يرسل الذكر بمعرّف sleep)."""
     config = load_config()
     if not config["schedule"]:
         await update.message.reply_text("لا يوجد أذكار في الجدول بعد.")
         return
-    entry = config["schedule"][0]
+
+    if context.args:
+        requested_id = context.args[0]
+        entry = next(
+            (e for e in config["schedule"] if e["id"] == requested_id), None
+        )
+        if entry is None:
+            available = ", ".join(e["id"] for e in config["schedule"])
+            await update.message.reply_text(
+                f"لا يوجد ذكر بالمعرّف '{requested_id}'.\nالمعرّفات المتاحة: {available}"
+            )
+            return
+    else:
+        entry = config["schedule"][0]
+
     await send_entry(context, entry, chat_ids=[update.effective_chat.id])
 
 
