@@ -127,7 +127,7 @@ def build_welcome_text() -> str:
         "- صدقة جارية لي ولكل مسلم 🌸🌿،\n"
         "- لا تنسونا من صالح دعائكم فضلاً.\n\n"
         "- رابط البوت:\n"
-        "https://t.me/Yasser25525yasserbot"
+        ""https://t.me/athkar_yawmi_bot""
     )
 
 
